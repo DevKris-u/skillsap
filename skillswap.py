@@ -11,7 +11,7 @@ logging.basicConfig(filename='skillswap.log', level=logging.INFO)
 # Inicjalizacja aplikacji
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super-secret-key-123'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///skillswap.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/skillswap.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
