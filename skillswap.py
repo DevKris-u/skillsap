@@ -12,7 +12,7 @@ logging.basicConfig(filename='skillswap.log', level=logging.INFO)
 # Inicjalizacja aplikacji
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret-key-123')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/skillswap.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///skillswap.db')  # Bezpieczniejsza ścieżka SQLite
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -36,12 +36,12 @@ class User(UserMixin, db.Model):
     skills_offered = db.Column(db.String(500))
     skills_wanted = db.Column(db.String(500))
     location = db.Column(db.String(100), index=True)
-    category = db.Column(db.String(100))  # Kategoria umiejętności
+    category = db.Column(db.String(100))
     points = db.Column(db.Integer, default=10)
     badges = db.Column(db.String(500), default='')
     notifications = db.Column(db.Integer, default=0)
-    rating = db.Column(db.Float, default=0.0)  # Średnia ocena
-    rating_count = db.Column(db.Integer, default=0)  # Liczba ocen
+    rating = db.Column(db.Float, default=0.0)
+    rating_count = db.Column(db.Integer, default=0)
 
 class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +51,7 @@ class Session(db.Model):
     category = db.Column(db.String(100))
     date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='pending')
-    rating = db.Column(db.Integer, nullable=True)  # Ocena sesji (1-5)
+    rating = db.Column(db.Integer, nullable=True)
     teacher = db.relationship('User', foreign_keys=[teacher_id], lazy='select')
     student = db.relationship('User', foreign_keys=[student_id], lazy='select')
 
@@ -77,6 +77,7 @@ INDEX_HTML = """
 <head>
     <title>SkillSwap</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 200px; background-color: #f8f9fa; padding: 20px; }
         .content { margin-left: 220px; padding: 20px; }
@@ -121,6 +122,7 @@ REGISTER_HTML = """
 <head>
     <title>Rejestracja</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 200px; background-color: #f8f9fa; padding: 20px; }
         .content { margin-left: 220px; padding: 20px; }
@@ -194,6 +196,7 @@ LOGIN_HTML = """
 <head>
     <title>Logowanie</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 200px; background-color: #f8f9fa; padding: 20px; }
         .content { margin-left: 220px; padding: 20px; }
@@ -651,42 +654,48 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username'].strip()
-        email = request.form['email'].strip().lower()
-        password = request.form['password']
-        skills_offered = request.form['skills_offered'].strip()
-        category = request.form['category']
-        skills_wanted = request.form['skills_wanted'].strip()
-        location = request.form['location'].strip()
+        try:
+            username = request.form['username'].strip()
+            email = request.form['email'].strip().lower()
+            password = request.form['password']
+            skills_offered = request.form.get('skills_offered', '').strip()
+            category = request.form.get('category', '')
+            skills_wanted = request.form.get('skills_wanted', '').strip()
+            location = request.form.get('location', '').strip()
 
-        if len(username) < 3:
-            flash('Nazwa użytkownika musi mieć co najmniej 3 znaki!')
-            return redirect(url_for('register'))
-        if len(password) < 6:
-            flash('Hasło musi mieć co najmniej 6 znaków!')
-            return redirect(url_for('register'))
-        if User.query.filter_by(email=email).first():
-            flash('Email już istnieje!')
-            return redirect(url_for('register'))
-        if User.query.filter_by(username=username).first():
-            flash('Nazwa użytkownika już istnieje!')
-            return redirect(url_for('register'))
+            if len(username) < 3:
+                flash('Nazwa użytkownika musi mieć co najmniej 3 znaki!')
+                return redirect(url_for('register'))
+            if len(password) < 6:
+                flash('Hasło musi mieć co najmniej 6 znaków!')
+                return redirect(url_for('register'))
+            if User.query.filter_by(email=email).first():
+                flash('Email już istnieje!')
+                return redirect(url_for('register'))
+            if User.query.filter_by(username=username).first():
+                flash('Nazwa użytkownika już istnieje!')
+                return redirect(url_for('register'))
 
-        user = User(
-            username=username,
-            email=email,
-            password=generate_password_hash(password),
-            skills_offered=skills_offered,
-            skills_wanted=skills_wanted,
-            location=location,
-            category=category,
-            points=10
-        )
-        db.session.add(user)
-        db.session.commit()
-        logging.info(f'Rejestracja użytkownika: {username}')
-        flash('Rejestracja udana! Zaloguj się.')
-        return redirect(url_for('login'))
+            user = User(
+                username=username,
+                email=email,
+                password=generate_password_hash(password),
+                skills_offered=skills_offered or None,
+                skills_wanted=skills_wanted or None,
+                location=location or None,
+                category=category or None,
+                points=10
+            )
+            db.session.add(user)
+            db.session.commit()
+            logging.info(f'Rejestracja użytkownika: {username}')
+            flash('Rejestracja udana! Zaloguj się.')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Błąd podczas rejestracji: {str(e)}')
+            flash('Wystąpił błąd podczas rejestracji. Spróbuj ponownie.')
+            return redirect(url_for('register'))
 
     return render_template_string(REGISTER_HTML, categories=SKILL_CATEGORIES.keys())
 
@@ -736,28 +745,34 @@ def user_profile(user_id=None):
 @login_required
 def edit_profile():
     if request.method == 'POST':
-        username = request.form['username'].strip()
-        skills_offered = request.form['skills_offered'].strip()
-        category = request.form['category']
-        skills_wanted = request.form['skills_wanted'].strip()
-        location = request.form['location'].strip()
+        try:
+            username = request.form['username'].strip()
+            skills_offered = request.form.get('skills_offered', '').strip()
+            category = request.form.get('category', '')
+            skills_wanted = request.form.get('skills_wanted', '').strip()
+            location = request.form.get('location', '').strip()
 
-        if len(username) < 3:
-            flash('Nazwa użytkownika musi mieć co najmniej 3 znaki!')
-            return redirect(url_for('edit_profile'))
-        if username != current_user.username and User.query.filter_by(username=username).first():
-            flash('Nazwa użytkownika już istnieje!')
-            return redirect(url_for('edit_profile'))
+            if len(username) < 3:
+                flash('Nazwa użytkownika musi mieć co najmniej 3 znaki!')
+                return redirect(url_for('edit_profile'))
+            if username != current_user.username and User.query.filter_by(username=username).first():
+                flash('Nazwa użytkownika już istnieje!')
+                return redirect(url_for('edit_profile'))
 
-        current_user.username = username
-        current_user.skills_offered = skills_offered
-        current_user.category = category
-        current_user.skills_wanted = skills_wanted
-        current_user.location = location
-        db.session.commit()
-        logging.info(f'Edycja profilu: {current_user.username}')
-        flash('Profil zaktualizowany!')
-        return redirect(url_for('profile'))
+            current_user.username = username
+            current_user.skills_offered = skills_offered or None
+            current_user.category = category or None
+            current_user.skills_wanted = skills_wanted or None
+            current_user.location = location or None
+            db.session.commit()
+            logging.info(f'Edycja profilu: {current_user.username}')
+            flash('Profil zaktualizowany!')
+            return redirect(url_for('profile'))
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Błąd podczas edycji profilu: {str(e)}')
+            flash('Wystąpił błąd podczas edycji profilu. Spróbuj ponownie.')
+            return redirect(url_for('edit_profile'))
 
     return render_template_string(EDIT_PROFILE_HTML, user=current_user, categories=SKILL_CATEGORIES)
 
@@ -765,9 +780,9 @@ def edit_profile():
 @login_required
 def search():
     if request.method == 'POST':
-        skill = request.form['skill'].strip().lower()
-        category = request.form['category'].strip()
-        location = request.form['location'].strip().lower()
+        skill = request.form.get('skill', '').strip().lower()
+        category = request.form.get('category', '').strip()
+        location = request.form.get('location', '').strip().lower()
         query = User.query
         if skill:
             query = query.filter(User.skills_offered.contains(skill))
@@ -787,132 +802,156 @@ def session(teacher_id):
         flash('Nie możesz umówić sesji z samym sobą!')
         return redirect(url_for('search'))
     if request.method == 'POST':
-        skill = request.form['skill'].strip()
-        if len(skill) < 2:
-            flash('Umiejętność musi mieć co najmniej 2 znaki!')
-            return redirect(url_for('session', teacher_id=teacher_id))
-        if current_user.points < 5:
-            flash('Nie masz wystarczająco punktów (potrzeba 5)!')
-            return redirect(url_for('session', teacher_id=teacher_id))
-        existing_session = Session.query.filter_by(
-            teacher_id=teacher_id, student_id=current_user.id, status='pending'
-        ).first()
-        if existing_session:
-            flash('Masz już oczekującą sesję z tym nauczycielem!')
+        try:
+            skill = request.form['skill'].strip()
+            if len(skill) < 2:
+                flash('Umiejętność musi mieć co najmniej 2 znaki!')
+                return redirect(url_for('session', teacher_id=teacher_id))
+            if current_user.points < 5:
+                flash('Nie masz wystarczająco punktów (potrzeba 5)!')
+                return redirect(url_for('session', teacher_id=teacher_id))
+            existing_session = Session.query.filter_by(
+                teacher_id=teacher_id, student_id=current_user.id, status='pending'
+            ).first()
+            if existing_session:
+                flash('Masz już oczekującą sesję z tym nauczycielem!')
+                return redirect(url_for('profile'))
+            session = Session(
+                teacher_id=teacher_id,
+                student_id=current_user.id,
+                skill=skill,
+                category=teacher.category
+            )
+            current_user.points -= 5
+            teacher.notifications += 1
+            db.session.add(session)
+            db.session.commit()
+            logging.info(f'Umówiono sesję: {current_user.username} z {teacher.username}')
+            flash('Sesja umówiona! Czekaj na potwierdzenie.')
             return redirect(url_for('profile'))
-        session = Session(
-            teacher_id=teacher_id,
-            student_id=current_user.id,
-            skill=skill,
-            category=teacher.category
-        )
-        current_user.points -= 5
-        teacher.notifications += 1
-        db.session.add(session)
-        db.session.commit()
-        logging.info(f'Umówiono sesję: {current_user.username} z {teacher.username}')
-        flash('Sesja umówiona! Czekaj na potwierdzenie.')
-        return redirect(url_for('profile'))
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Błąd podczas umawiania sesji: {str(e)}')
+            flash('Wystąpił błąd podczas umawiania sesji. Spróbuj ponownie.')
+            return redirect(url_for('session', teacher_id=teacher_id))
     return render_template_string(SESSION_HTML, teacher=teacher)
 
 @app.route('/update_session/<int:session_id>/<action>')
 @login_required
 def update_session(session_id, action):
-    session = Session.query.get_or_404(session_id)
-    if session.teacher_id != current_user.id:
-        flash('Brak uprawnień!')
+    try:
+        session = Session.query.get_or_404(session_id)
+        if session.teacher_id != current_user.id:
+            flash('Brak uprawnień!')
+            return redirect(url_for('profile'))
+
+        if action == 'accept':
+            session.status = 'accepted'
+        elif action == 'reject':
+            session.status = 'rejected'
+            student = User.query.get(session.student_id)
+            student.points += 5
+        elif action == 'complete':
+            session.status = 'completed'
+            teacher = User.query.get(session.teacher_id)
+            teacher.points += 10
+            completed_sessions = Session.query.filter_by(teacher_id=teacher.id, status='completed').count()
+            if completed_sessions >= 10 and 'Mistrz Nauczania' not in (teacher.badges or ''):
+                teacher.badges = (teacher.badges or '') + ',Mistrz Nauczania'
+
+        db.session.commit()
+        logging.info(f'Aktualizacja sesji {session_id}: {action}')
+        flash(f'Sesja zaktualizowana: {action}')
         return redirect(url_for('profile'))
-    
-    if action == 'accept':
-        session.status = 'accepted'
-    elif action == 'reject':
-        session.status = 'rejected'
-        student = User.query.get(session.student_id)
-        student.points += 5
-    elif action == 'complete':
-        session.status = 'completed'
-        teacher = User.query.get(session.teacher_id)
-        teacher.points += 10
-        completed_sessions = Session.query.filter_by(teacher_id=teacher.id, status='completed').count()
-        if completed_sessions >= 10 and 'Mistrz Nauczania' not in (teacher.badges or ''):
-            teacher.badges = (teacher.badges or '') + ',Mistrz Nauczania'
-    
-    db.session.commit()
-    logging.info(f'Aktualizacja sesji {session_id}: {action}')
-    flash(f'Sesja zaktualizowana: {action}')
-    return redirect(url_for('profile'))
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Błąd podczas aktualizacji sesji: {str(e)}')
+        flash('Wystąpił błąd podczas aktualizacji sesji. Spróbuj ponownie.')
+        return redirect(url_for('profile'))
 
 @app.route('/rate_session/<int:session_id>', methods=['POST'])
 @login_required
 def rate_session(session_id):
-    session = Session.query.get_or_404(session_id)
-    if session.student_id != current_user.id or session.status != 'completed' or session.rating:
-        flash('Nie możesz ocenić tej sesji!')
+    try:
+        session = Session.query.get_or_404(session_id)
+        if session.student_id != current_user.id or session.status != 'completed' or session.rating:
+            flash('Nie możesz ocenić tej sesji!')
+            return redirect(url_for('profile'))
+
+        rating = int(request.form['rating'])
+        if rating < 1 or rating > 5:
+            flash('Ocena musi być od 1 do 5!')
+            return redirect(url_for('profile'))
+
+        session.rating = rating
+        teacher = User.query.get(session.teacher_id)
+        teacher.rating_count += 1
+        teacher.rating = ((teacher.rating * (teacher.rating_count - 1)) + rating) / teacher.rating_count
+        teacher.notifications += 1
+        db.session.commit()
+        logging.info(f'Ocena sesji {session_id}: {rating} przez {current_user.username}')
+        flash('Sesja oceniona!')
         return redirect(url_for('profile'))
-    
-    rating = int(request.form['rating'])
-    if rating < 1 or rating > 5:
-        flash('Ocena musi być od 1 do 5!')
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Błąd podczas oceny sesji: {str(e)}')
+        flash('Wystąpił błąd podczas oceny sesji. Spróbuj ponownie.')
         return redirect(url_for('profile'))
-    
-    session.rating = rating
-    teacher = User.query.get(session.teacher_id)
-    teacher.rating_count += 1
-    teacher.rating = ((teacher.rating * (teacher.rating_count - 1)) + rating) / teacher.rating_count
-    teacher.notifications += 1
-    db.session.commit()
-    logging.info(f'Ocena sesji {session_id}: {rating} przez {current_user.username}')
-    flash('Sesja oceniona!')
-    return redirect(url_for('profile'))
 
 @app.route('/messages', methods=['GET'])
 @app.route('/messages/<int:receiver_id>', methods=['GET', 'POST'])
 @login_required
 def messages(receiver_id=None):
-    if request.method == 'POST':
-        content = request.form['content'].strip()
-        if not content:
-            flash('Wiadomość nie może być pusta!')
+    try:
+        if request.method == 'POST':
+            content = request.form['content'].strip()
+            if not content:
+                flash('Wiadomość nie może być pusta!')
+                return redirect(url_for('messages', receiver_id=receiver_id))
+            receiver = User.query.get_or_404(receiver_id)
+            message = Message(
+                sender_id=current_user.id,
+                receiver_id=receiver_id,
+                content=content
+            )
+            receiver.notifications += 1
+            current_user.points += 1
+            db.session.add(message)
+            db.session.commit()
+            logging.info(f'Wiadomość od {current_user.username} do {receiver.username}')
+            flash('Wiadomość wysłana!')
             return redirect(url_for('messages', receiver_id=receiver_id))
-        receiver = User.query.get_or_404(receiver_id)
-        message = Message(
-            sender_id=current_user.id,
-            receiver_id=receiver_id,
-            content=content
-        )
-        receiver.notifications += 1
-        current_user.points += 1
-        db.session.add(message)
-        db.session.commit()
-        logging.info(f'Wiadomość od {current_user.username} do {receiver.username}')
-        flash('Wiadomość wysłana!')
-        return redirect(url_for('messages', receiver_id=receiver_id))
-    
-    if receiver_id:
-        unread = Message.query.filter_by(receiver_id=current_user.id, sender_id=receiver_id, is_read=False).all()
-        for msg in unread:
-            msg.is_read = True
-        current_user.notifications = max(0, current_user.notifications - len(unread))
-        db.session.commit()
 
-    conversations = db.session.query(
-        User.id.label('user_id'),
-        User.username,
-        db.func.count(Message.id).filter(Message.is_read == False, Message.receiver_id == current_user.id).label('unread')
-    ).join(Message, (Message.sender_id == User.id) | (Message.receiver_id == User.id))\
-     .filter((Message.sender_id == current_user.id) | (Message.receiver_id == current_user.id))\
-     .group_by(User.id, User.username).all()
+        if receiver_id:
+            unread = Message.query.filter_by(receiver_id=current_user.id, sender_id=receiver_id, is_read=False).all()
+            for msg in unread:
+                msg.is_read = True
+            current_user.notifications = max(0, current_user.notifications - len(unread))
+            db.session.commit()
 
-    messages = []
-    receiver = None
-    if receiver_id:
-        messages = Message.query.filter(
-            ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id)) |
-            ((Message.sender_id == receiver_id) & (Message.receiver_id == current_user.id))
-        ).order_by(Message.timestamp).all()
-        receiver = User.query.get_or_404(receiver_id)
-    
-    return render_template_string(MESSAGES_HTML, conversations=conversations, messages=messages, receiver=receiver, receiver_id=receiver_id)
+        conversations = db.session.query(
+            User.id.label('user_id'),
+            User.username,
+            db.func.count(Message.id).filter(Message.is_read == False, Message.receiver_id == current_user.id).label('unread')
+        ).join(Message, (Message.sender_id == User.id) | (Message.receiver_id == User.id))\
+         .filter((Message.sender_id == current_user.id) | (Message.receiver_id == current_user.id))\
+         .group_by(User.id, User.username).all()
+
+        messages = []
+        receiver = None
+        if receiver_id:
+            messages = Message.query.filter(
+                ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id)) |
+                ((Message.sender_id == receiver_id) & (Message.receiver_id == current_user.id))
+            ).order_by(Message.timestamp).all()
+            receiver = User.query.get_or_404(receiver_id)
+
+        return render_template_string(MESSAGES_HTML, conversations=conversations, messages=messages, receiver=receiver, receiver_id=receiver_id)
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Błąd w wiadomościach: {str(e)}')
+        flash('Wystąpił błąd w module wiadomości. Spróbuj ponownie.')
+        return redirect(url_for('profile'))
 
 @app.route('/send_message/<int:receiver_id>')
 @login_required
@@ -923,24 +962,40 @@ def send_message(receiver_id):
 @login_required
 def buy_points():
     if request.method == 'POST':
-        points = int(request.form['points'])
-        current_user.points += points
-        db.session.commit()
-        logging.info(f'Kupiono {points} punktów przez {current_user.username}')
-        flash(f'Dodano {points} punktów!')
-        return redirect(url_for('profile'))
+        try:
+            points = int(request.form['points'])
+            current_user.points += points
+            db.session.commit()
+            logging.info(f'Kupiono {points} punktów przez {current_user.username}')
+            flash(f'Dodano {points} punktów!')
+            return redirect(url_for('profile'))
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Błąd podczas zakupu punktów: {str(e)}')
+            flash('Wystąpił błąd podczas zakupu punktów. Spróbuj ponownie.')
+            return redirect(url_for('buy_points'))
     return render_template_string(BUY_POINTS_HTML)
 
 @app.route('/clear_notifications')
 @login_required
 def clear_notifications():
-    current_user.notifications = 0
-    db.session.commit()
-    flash('Powiadomienia wyczyszczone!')
-    return redirect(url_for('profile'))
+    try:
+        current_user.notifications = 0
+        db.session.commit()
+        flash('Powiadomienia wyczyszczone!')
+        return redirect(url_for('profile'))
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Błąd podczas czyszczenia powiadomień: {str(e)}')
+        flash('Wystąpił błąd podczas czyszczenia powiadomień. Spróbuj ponownie.')
+        return redirect(url_for('profile'))
 
 # Uruchomienie aplikacji
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            logging.info("Baza danych zainicjalizowana.")
+        except Exception as e:
+            logging.error(f"Błąd podczas inicjalizacji bazy danych: {str(e)}")
     app.run(debug=True, host='0.0.0.0', port=5000)
