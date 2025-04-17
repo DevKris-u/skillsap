@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret-key-123')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///skillswap.db').replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-logging.basicConfig(filename='skillswap.log', level=logging.INFO, format='%(asctime)s - %(message)s')
+logging.basicConfig(filename='skillswap.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -77,20 +77,24 @@ def handle_db_errors(func):
         except Exception as e:
             db.session.rollback()
             logging.error(f'Błąd w {func.__name__}: {str(e)}')
-            flash('Wystąpił błąd. Spróbuj ponownie.')
+            flash(f'Błąd: {str(e)}')
             return redirect(url_for('index'))
     return wrapper
 
 def validate_form(form, is_register=True):
     username = form.get('username', '').strip()
+    email = form.get('email', '').strip().lower() if is_register else current_user.email
+    password = form.get('password', '') if is_register else None
+
     if len(username) < 3:
         flash('Nazwa użytkownika musi mieć co najmniej 3 znaki!')
         return False
     if is_register:
-        email = form.get('email', '').strip().lower()
-        password = form.get('password', '')
         if len(password) < 6:
             flash('Hasło musi mieć co najmniej 6 znaków!')
+            return False
+        if not email or '@' not in email:
+            flash('Niepoprawny email!')
             return False
         if User.query.filter_by(email=email).first():
             flash('Email już istnieje!')
@@ -131,7 +135,7 @@ BASE_HTML = """
     <div class="content">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <div class="alert alert-{% if 'Błędny' in messages[0] %}danger{% else %}info{% endif %}">
+                <div class="alert alert-{% if 'Błędny' in messages[0] or 'Niepoprawny' in messages[0] %}danger{% else %}info{% endif %}">
                     {% for message in messages %}
                         <p>{{ message }}</p>
                     {% endfor %}
@@ -517,11 +521,11 @@ def search():
     if request.method == 'POST':
         query = User.query
         if skill := request.form.get('skill', '').strip().lower():
-            query = query.filter(User.skills_offered.contains(skill))
+            query = query.filter(User.skills_offered.ilike(f'%{skill}%'))
         if category := request.form.get('category', '').strip():
             query = query.filter(User.category == category)
         if location := request.form.get('location', '').strip().lower():
-            query = query.filter(User.location.contains(location))
+            query = query.filter(User.location.ilike(f'%{location}%'))
         users = query.filter(User.id != current_user.id).all()
         return render_template_string(SEARCH_HTML, users=users, categories=SKILL_CATEGORIES)
     return render_template_string(SEARCH_HTML, categories=SKILL_CATEGORIES)
@@ -572,7 +576,7 @@ def update_session(session_id, action):
         session.status = 'completed'
         teacher = User.query.get(session.teacher_id)
         teacher.points += 10
-        if Session.query.filter_by(teacher_id=teacher.id, status='completed').count() >= 10:
+        if Session.query.filter_by(teacher_id=teacher.id, status='completed').count() >= 10 and 'Mistrz Nauczania' not in (teacher.badges or ''):
             teacher.badges = (teacher.badges or '') + ',Mistrz Nauczania'
     db.session.commit()
     flash(f'Sesja: {action}')
@@ -663,8 +667,12 @@ def clear_notifications():
     flash('Powiadomienia wyczyszczone!')
     return redirect(url_for('profile'))
 
-# Uruchomienie
+# Inicjalizacja bazy danych
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            logging.info("Baza danych zainicjalizowana.")
+        except Exception as e:
+            logging.error(f"Błąd inicjalizacji bazy danych: {str(e)}")
     app.run(debug=True, host='0.0.0.0', port=5000)
